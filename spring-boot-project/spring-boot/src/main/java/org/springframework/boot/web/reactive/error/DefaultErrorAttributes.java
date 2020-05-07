@@ -30,7 +30,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
@@ -53,6 +52,7 @@ import org.springframework.web.server.ServerWebExchange;
  * @author Brian Clozel
  * @author Stephane Nicoll
  * @author Michele Mancioppi
+ * @author Scott Frederick
  * @since 2.0.0
  * @see ErrorAttributes
  */
@@ -79,7 +79,14 @@ public class DefaultErrorAttributes implements ErrorAttributes {
 	}
 
 	@Override
+	@Deprecated
 	public Map<String, Object> getErrorAttributes(ServerRequest request, boolean includeStackTrace) {
+		return getErrorAttributes(request, includeStackTrace, false, false);
+	}
+
+	@Override
+	public Map<String, Object> getErrorAttributes(ServerRequest request, boolean includeStackTrace,
+			boolean includeMessage, boolean includeBindingErrors) {
 		Map<String, Object> errorAttributes = new LinkedHashMap<>();
 		errorAttributes.put("timestamp", new Date());
 		errorAttributes.put("path", request.path());
@@ -89,9 +96,9 @@ public class DefaultErrorAttributes implements ErrorAttributes {
 		HttpStatus errorStatus = determineHttpStatus(error, responseStatusAnnotation);
 		errorAttributes.put("status", errorStatus.value());
 		errorAttributes.put("error", errorStatus.getReasonPhrase());
-		errorAttributes.put("message", determineMessage(error, responseStatusAnnotation));
+		errorAttributes.put("message", determineMessage(error, responseStatusAnnotation, includeMessage));
 		errorAttributes.put("requestId", request.exchange().getRequest().getId());
-		handleException(errorAttributes, determineException(error), includeStackTrace);
+		handleException(errorAttributes, determineException(error), includeStackTrace, includeBindingErrors);
 		return errorAttributes;
 	}
 
@@ -102,8 +109,12 @@ public class DefaultErrorAttributes implements ErrorAttributes {
 		return responseStatusAnnotation.getValue("code", HttpStatus.class).orElse(HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 
-	private String determineMessage(Throwable error, MergedAnnotation<ResponseStatus> responseStatusAnnotation) {
-		if (error instanceof WebExchangeBindException) {
+	private String determineMessage(Throwable error, MergedAnnotation<ResponseStatus> responseStatusAnnotation,
+			boolean includeMessage) {
+		if (!includeMessage) {
+			return "";
+		}
+		if (error instanceof BindingResult) {
 			return error.getMessage();
 		}
 		if (error instanceof ResponseStatusException) {
@@ -130,14 +141,15 @@ public class DefaultErrorAttributes implements ErrorAttributes {
 		errorAttributes.put("trace", stackTrace.toString());
 	}
 
-	private void handleException(Map<String, Object> errorAttributes, Throwable error, boolean includeStackTrace) {
+	private void handleException(Map<String, Object> errorAttributes, Throwable error, boolean includeStackTrace,
+			boolean includeBindingErrors) {
 		if (this.includeException) {
 			errorAttributes.put("exception", error.getClass().getName());
 		}
 		if (includeStackTrace) {
 			addStackTrace(errorAttributes, error);
 		}
-		if (error instanceof BindingResult) {
+		if (includeBindingErrors && (error instanceof BindingResult)) {
 			BindingResult result = (BindingResult) error;
 			if (result.hasErrors()) {
 				errorAttributes.put("errors", result.getAllErrors());

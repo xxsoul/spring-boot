@@ -16,8 +16,12 @@
 
 package org.springframework.boot.autoconfigure.web.servlet;
 
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -76,6 +80,7 @@ import org.springframework.web.accept.ParameterContentNegotiationStrategy;
 import org.springframework.web.accept.PathExtensionContentNegotiationStrategy;
 import org.springframework.web.bind.support.ConfigurableWebBindingInitializer;
 import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.FormContentFilter;
 import org.springframework.web.filter.HiddenHttpMethodFilter;
 import org.springframework.web.filter.RequestContextFilter;
@@ -87,6 +92,7 @@ import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.ViewResolver;
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.ContentNegotiationConfigurer;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.handler.AbstractHandlerExceptionResolver;
@@ -320,7 +326,7 @@ class WebMvcAutoConfigurationTests {
 	}
 
 	@Test
-	void noDateFormat() {
+	void defaultDateFormat() {
 		this.contextRunner.run((context) -> {
 			FormattingConversionService conversionService = context.getBean(FormattingConversionService.class);
 			Date date = Date.from(ZonedDateTime.of(1988, 6, 25, 20, 30, 0, 0, ZoneId.systemDefault()).toInstant());
@@ -330,11 +336,58 @@ class WebMvcAutoConfigurationTests {
 	}
 
 	@Test
-	void overrideDateFormat() {
+	void customDateFormat() {
+		this.contextRunner.withPropertyValues("spring.mvc.format.date:dd*MM*yyyy").run((context) -> {
+			FormattingConversionService conversionService = context.getBean(FormattingConversionService.class);
+			Date date = Date.from(ZonedDateTime.of(1988, 6, 25, 20, 30, 0, 0, ZoneId.systemDefault()).toInstant());
+			assertThat(conversionService.convert(date, String.class)).isEqualTo("25*06*1988");
+		});
+	}
+
+	@Test
+	void customDateFormatWithDeprecatedProperty() {
 		this.contextRunner.withPropertyValues("spring.mvc.date-format:dd*MM*yyyy").run((context) -> {
 			FormattingConversionService conversionService = context.getBean(FormattingConversionService.class);
 			Date date = Date.from(ZonedDateTime.of(1988, 6, 25, 20, 30, 0, 0, ZoneId.systemDefault()).toInstant());
 			assertThat(conversionService.convert(date, String.class)).isEqualTo("25*06*1988");
+		});
+	}
+
+	@Test
+	void defaultTimeFormat() {
+		this.contextRunner.run((context) -> {
+			FormattingConversionService conversionService = context.getBean(FormattingConversionService.class);
+			LocalTime time = LocalTime.of(11, 43, 10);
+			assertThat(conversionService.convert(time, String.class))
+					.isEqualTo(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).format(time));
+		});
+	}
+
+	@Test
+	void customTimeFormat() {
+		this.contextRunner.withPropertyValues("spring.mvc.format.time=HH:mm:ss").run((context) -> {
+			FormattingConversionService conversionService = context.getBean(FormattingConversionService.class);
+			LocalTime time = LocalTime.of(11, 43, 10);
+			assertThat(conversionService.convert(time, String.class)).isEqualTo("11:43:10");
+		});
+	}
+
+	@Test
+	void defaultDateTimeFormat() {
+		this.contextRunner.run((context) -> {
+			FormattingConversionService conversionService = context.getBean(FormattingConversionService.class);
+			LocalDateTime dateTime = LocalDateTime.of(2020, 4, 28, 11, 43, 10);
+			assertThat(conversionService.convert(dateTime, String.class))
+					.isEqualTo(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).format(dateTime));
+		});
+	}
+
+	@Test
+	void customDateTimeTimeFormat() {
+		this.contextRunner.withPropertyValues("spring.mvc.format.date-time=yyyy-MM-dd HH:mm:ss").run((context) -> {
+			FormattingConversionService conversionService = context.getBean(FormattingConversionService.class);
+			LocalDateTime dateTime = LocalDateTime.of(2020, 4, 28, 11, 43, 10);
+			assertThat(conversionService.convert(dateTime, String.class)).isEqualTo("2020-04-28 11:43:10");
 		});
 	}
 
@@ -431,6 +484,7 @@ class WebMvcAutoConfigurationTests {
 	}
 
 	@Test
+	@Deprecated
 	void customMediaTypes() {
 		this.contextRunner.withPropertyValues("spring.mvc.contentnegotiation.media-types.yaml:text/yaml",
 				"spring.mvc.contentnegotiation.favor-path-extension:true").run((context) -> {
@@ -534,7 +588,19 @@ class WebMvcAutoConfigurationTests {
 		this.contextRunner.withPropertyValues("spring.resources.static-locations:classpath:/welcome-page/")
 				.run((context) -> {
 					assertThat(context).hasSingleBean(WelcomePageHandlerMapping.class);
-					assertThat(context.getBean(WelcomePageHandlerMapping.class).getRootHandler()).isNotNull();
+					WelcomePageHandlerMapping bean = context.getBean(WelcomePageHandlerMapping.class);
+					assertThat(bean.getRootHandler()).isNotNull();
+				});
+	}
+
+	@Test
+	void welcomePageHandlerIncludesCorsConfiguration() {
+		this.contextRunner.withPropertyValues("spring.resources.static-locations:classpath:/welcome-page/")
+				.withUserConfiguration(CorsConfigurer.class).run((context) -> {
+					WelcomePageHandlerMapping bean = context.getBean(WelcomePageHandlerMapping.class);
+					UrlBasedCorsConfigurationSource source = (UrlBasedCorsConfigurationSource) ReflectionTestUtils
+							.getField(bean, "corsConfigurationSource");
+					assertThat(source.getCorsConfigurations()).containsKey("/**");
 				});
 	}
 
@@ -685,6 +751,7 @@ class WebMvcAutoConfigurationTests {
 	}
 
 	@Test
+	@Deprecated
 	void useSuffixPatternMatch() {
 		this.contextRunner.withPropertyValues("spring.mvc.pathmatch.use-suffix-pattern:true",
 				"spring.mvc.pathmatch.use-registered-suffix-pattern:true").run((context) -> {
@@ -705,6 +772,7 @@ class WebMvcAutoConfigurationTests {
 	}
 
 	@Test
+	@Deprecated
 	void pathExtensionContentNegotiation() {
 		this.contextRunner.withPropertyValues("spring.mvc.contentnegotiation.favor-path-extension:true")
 				.run((context) -> {
@@ -716,6 +784,7 @@ class WebMvcAutoConfigurationTests {
 	}
 
 	@Test
+	@Deprecated
 	void queryParameterContentNegotiation() {
 		this.contextRunner.withPropertyValues("spring.mvc.contentnegotiation.favor-parameter:true").run((context) -> {
 			RequestMappingHandlerMapping handlerMapping = context.getBean(RequestMappingHandlerMapping.class);
@@ -1147,6 +1216,16 @@ class WebMvcAutoConfigurationTests {
 		@Override
 		public Example parse(String source, Locale locale) {
 			return new Example(source, new Date());
+		}
+
+	}
+
+	@Configuration
+	static class CorsConfigurer implements WebMvcConfigurer {
+
+		@Override
+		public void addCorsMappings(CorsRegistry registry) {
+			registry.addMapping("/**").allowedMethods("GET");
 		}
 
 	}

@@ -75,4 +75,32 @@ class SystemEnvironmentPropertyMapperTests extends AbstractPropertyMapperTests {
 		assertThat(applicable).isFalse();
 	}
 
+	@Test
+	void isAncestorOfConsidersLegacyNames() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("my.spring-boot");
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.adapt("MY_SPRING_BOOT_PROPERTY", '_')))
+				.isTrue();
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.adapt("MY_SPRINGBOOT_PROPERTY", '_')))
+				.isTrue();
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.adapt("MY_BOOT_PROPERTY", '_'))).isFalse();
+	}
+
+	@Test
+	void isAncestorOfWhenNonCanonicalSource() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.adapt("my.springBoot", '.');
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.of("my.spring-boot.property"))).isTrue();
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.of("my.springboot.property"))).isTrue();
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.of("my.boot.property"))).isFalse();
+	}
+
+	@Test
+	void isAncestorOfWhenNonCanonicalAndDashedSource() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.adapt("my.springBoot.input-value", '.');
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.of("my.spring-boot.input-value.property")))
+				.isTrue();
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.of("my.springboot.inputvalue.property")))
+				.isTrue();
+		assertThat(getMapper().isAncestorOf(name, ConfigurationPropertyName.of("my.boot.property"))).isFalse();
+	}
+
 }

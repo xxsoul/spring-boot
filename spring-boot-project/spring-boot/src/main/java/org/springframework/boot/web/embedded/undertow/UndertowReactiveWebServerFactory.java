@@ -103,7 +103,7 @@ public class UndertowReactiveWebServerFactory extends AbstractReactiveWebServerF
 		handler = UndertowCompressionConfigurer.configureCompression(getCompression(), handler);
 		Closeable closeable = null;
 		if (isAccessLogEnabled()) {
-			AccessLogHandlerConfiguration accessLogHandlerConfiguration = configureAccessLogHandler(builder, handler);
+			AccessLogHandlerConfiguration accessLogHandlerConfiguration = configureAccessLogHandler(handler);
 			closeable = accessLogHandlerConfiguration.closeable;
 			handler = accessLogHandlerConfiguration.accessLogHandler;
 		}
@@ -141,13 +141,14 @@ public class UndertowReactiveWebServerFactory extends AbstractReactiveWebServerF
 		else {
 			builder.addHttpListener(port, getListenAddress());
 		}
+		builder.setServerOption(UndertowOptions.SHUTDOWN_TIMEOUT, 0);
 		for (UndertowBuilderCustomizer customizer : this.builderCustomizers) {
 			customizer.customize(builder);
 		}
 		return builder;
 	}
 
-	private AccessLogHandlerConfiguration configureAccessLogHandler(Undertow.Builder builder, HttpHandler handler) {
+	private AccessLogHandlerConfiguration configureAccessLogHandler(HttpHandler handler) {
 		try {
 			createAccessLogDirectoryIfNecessary();
 			XnioWorker worker = createWorker();

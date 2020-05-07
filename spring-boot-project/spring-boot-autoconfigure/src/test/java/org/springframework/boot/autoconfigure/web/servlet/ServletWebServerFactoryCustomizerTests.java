@@ -75,6 +75,14 @@ class ServletWebServerFactoryCustomizerTests {
 	}
 
 	@Test
+	void testCustomizeDefaultServlet() {
+		ConfigurableServletWebServerFactory factory = mock(ConfigurableServletWebServerFactory.class);
+		this.properties.getServlet().setRegisterDefaultServlet(false);
+		this.customizer.customize(factory);
+		verify(factory).setRegisterDefaultServlet(false);
+	}
+
+	@Test
 	void testCustomizeSsl() {
 		ConfigurableServletWebServerFactory factory = mock(ConfigurableServletWebServerFactory.class);
 		Ssl ssl = mock(Ssl.class);
@@ -147,13 +155,13 @@ class ServletWebServerFactoryCustomizerTests {
 	@Test
 	void sessionStoreDir() {
 		Map<String, String> map = new HashMap<>();
-		map.put("server.servlet.session.store-dir", "myfolder");
+		map.put("server.servlet.session.store-dir", "mydirectory");
 		bindProperties(map);
 		ConfigurableServletWebServerFactory factory = mock(ConfigurableServletWebServerFactory.class);
 		this.customizer.customize(factory);
 		ArgumentCaptor<Session> sessionCaptor = ArgumentCaptor.forClass(Session.class);
 		verify(factory).setSession(sessionCaptor.capture());
-		assertThat(sessionCaptor.getValue().getStoreDir()).isEqualTo(new File("myfolder"));
+		assertThat(sessionCaptor.getValue().getStoreDir()).isEqualTo(new File("mydirectory"));
 	}
 
 	@Test

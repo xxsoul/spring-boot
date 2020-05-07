@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,33 @@ final class SystemEnvironmentPropertyMapper implements PropertyMapper {
 			return NO_MAPPINGS;
 		}
 		return new PropertyMapping[] { new PropertyMapping(propertySourceName, name) };
+	}
+
+	@Override
+	public boolean isAncestorOf(ConfigurationPropertyName name, ConfigurationPropertyName candidate) {
+		return name.isAncestorOf(candidate) || isLegacyAncestorOf(name, candidate);
+	}
+
+	private boolean isLegacyAncestorOf(ConfigurationPropertyName name, ConfigurationPropertyName candidate) {
+		if (!hasDashedEntries(name)) {
+			return false;
+		}
+		StringBuilder legacyCompatibleName = new StringBuilder();
+		for (int i = 0; i < name.getNumberOfElements(); i++) {
+			legacyCompatibleName.append((i != 0) ? "." : "");
+			legacyCompatibleName.append(name.getElement(i, Form.DASHED).replace('-', '.'));
+		}
+		return ConfigurationPropertyName.isValid(legacyCompatibleName)
+				&& ConfigurationPropertyName.of(legacyCompatibleName).isAncestorOf(candidate);
+	}
+
+	boolean hasDashedEntries(ConfigurationPropertyName name) {
+		for (int i = 0; i < name.getNumberOfElements(); i++) {
+			if (name.getElement(i, Form.DASHED).indexOf('-') != -1) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private ConfigurationPropertyName convertName(String propertySourceName) {

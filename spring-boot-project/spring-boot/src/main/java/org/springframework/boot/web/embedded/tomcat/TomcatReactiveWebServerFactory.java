@@ -149,7 +149,7 @@ public class TomcatReactiveWebServerFactory extends AbstractReactiveWebServerFac
 		context.addLifecycleListener(new Tomcat.FixContextListener());
 		context.setParentClassLoader(ClassUtils.getDefaultClassLoader());
 		skipAllTldScanning(context);
-		WebappLoader loader = new WebappLoader(context.getParentClassLoader());
+		WebappLoader loader = new WebappLoader();
 		loader.setLoaderClass(TomcatEmbeddedWebappClassLoader.class.getName());
 		loader.setDelegate(true);
 		context.setLoader(loader);
@@ -178,8 +178,8 @@ public class TomcatReactiveWebServerFactory extends AbstractReactiveWebServerFac
 	protected void customizeConnector(Connector connector) {
 		int port = Math.max(getPort(), 0);
 		connector.setPort(port);
-		if (StringUtils.hasText(this.getServerHeader())) {
-			connector.setAttribute("server", this.getServerHeader());
+		if (StringUtils.hasText(getServerHeader())) {
+			connector.setAttribute("server", getServerHeader());
 		}
 		if (connector.getProtocolHandler() instanceof AbstractProtocol) {
 			customizeProtocol((AbstractProtocol<?>) connector.getProtocolHandler());

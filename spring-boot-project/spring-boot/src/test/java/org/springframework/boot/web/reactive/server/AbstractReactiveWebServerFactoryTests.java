@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
@@ -43,6 +44,7 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
@@ -178,8 +180,11 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 		ssl.setKeyPassword(keyPassword);
 		ssl.setKeyAlias("test-alias-404");
 		factory.setSsl(ssl);
-		assertThatThrownBy(() -> factory.getWebServer(new EchoHandler()).start())
-				.hasStackTraceContaining("Keystore does not contain specified alias 'test-alias-404'");
+		assertThatSslWithInvalidAliasCallFails(() -> factory.getWebServer(new EchoHandler()).start());
+	}
+
+	protected void assertThatSslWithInvalidAliasCallFails(ThrowingCallable call) {
+		assertThatThrownBy(call).hasStackTraceContaining("Keystore does not contain specified alias 'test-alias-404'");
 	}
 
 	protected ReactorClientHttpConnector buildTrustAllSslConnector() {
@@ -280,7 +285,7 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 	}
 
 	@Test
-	void compressionOfResponseToGetRequest() {
+	protected void compressionOfResponseToGetRequest() {
 		WebClient client = prepareCompressionTest();
 		ResponseEntity<Void> response = client.get().exchange().flatMap((res) -> res.toEntity(Void.class))
 				.block(Duration.ofSeconds(30));
@@ -288,7 +293,7 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 	}
 
 	@Test
-	void compressionOfResponseToPostRequest() {
+	protected void compressionOfResponseToPostRequest() {
 		WebClient client = prepareCompressionTest();
 		ResponseEntity<Void> response = client.post().exchange().flatMap((res) -> res.toEntity(Void.class))
 				.block(Duration.ofSeconds(30));
@@ -419,6 +424,25 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 		assertThat(responseLatch.await(5, TimeUnit.SECONDS)).isTrue();
 	}
 
+	@Test
+	void whenARequestIsActiveThenStopWillComplete() throws InterruptedException, BrokenBarrierException {
+		AbstractReactiveWebServerFactory factory = getFactory();
+		BlockingHandler blockingHandler = new BlockingHandler();
+		this.webServer = factory.getWebServer(blockingHandler);
+		this.webServer.start();
+		Mono<ResponseEntity<Void>> request = getWebClient(this.webServer.getPort()).build().get().retrieve()
+				.toBodilessEntity();
+		AtomicReference<ResponseEntity<Void>> responseReference = new AtomicReference<>();
+		CountDownLatch responseLatch = new CountDownLatch(1);
+		request.subscribe((response) -> {
+			responseReference.set(response);
+			responseLatch.countDown();
+		});
+		blockingHandler.awaitQueue();
+		this.webServer.stop();
+		blockingHandler.completeOne();
+	}
+
 	protected WebClient prepareCompressionTest() {
 		Compression compression = new Compression();
 		compression.setEnabled(true);
@@ -443,10 +467,12 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 	}
 
 	protected void assertResponseIsCompressed(ResponseEntity<Void> response) {
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getHeaders().getFirst("X-Test-Compressed")).isEqualTo("true");
 	}
 
 	protected void assertResponseIsNotCompressed(ResponseEntity<Void> response) {
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getHeaders().keySet()).doesNotContain("X-Test-Compressed");
 	}
 
@@ -479,7 +505,7 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 	}
 
 	protected void awaitInGracefulShutdown() {
-		while (!this.inGracefulShutdown()) {
+		while (!inGracefulShutdown()) {
 			try {
 				Thread.sleep(100);
 			}

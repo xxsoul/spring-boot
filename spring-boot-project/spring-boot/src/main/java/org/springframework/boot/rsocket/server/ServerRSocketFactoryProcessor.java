@@ -25,8 +25,10 @@ import io.rsocket.RSocketFactory.ServerRSocketFactory;
  * @author Brian Clozel
  * @see RSocketServerFactory
  * @since 2.2.0
+ * @deprecated in favor of {@link RSocketServerCustomizer} as of 2.2.7
  */
 @FunctionalInterface
+@Deprecated
 public interface ServerRSocketFactoryProcessor {
 
 	/**

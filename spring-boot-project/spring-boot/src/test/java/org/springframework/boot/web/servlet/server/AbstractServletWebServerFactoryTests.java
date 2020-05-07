@@ -22,6 +22,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.ServerSocket;
@@ -95,6 +96,7 @@ import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.TrustStrategy;
 import org.apache.jasper.EmbeddedServletOptions;
 import org.apache.jasper.servlet.JspServlet;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -111,6 +113,7 @@ import org.springframework.boot.testsupport.web.servlet.ExampleServlet;
 import org.springframework.boot.web.server.Compression;
 import org.springframework.boot.web.server.ErrorPage;
 import org.springframework.boot.web.server.MimeMappings;
+import org.springframework.boot.web.server.PortInUseException;
 import org.springframework.boot.web.server.Shutdown;
 import org.springframework.boot.web.server.Ssl;
 import org.springframework.boot.web.server.Ssl.ClientAuth;
@@ -469,8 +472,12 @@ public abstract class AbstractServletWebServerFactoryTests {
 		factory.setSsl(ssl);
 		ServletRegistrationBean<ExampleServlet> registration = new ServletRegistrationBean<>(
 				new ExampleServlet(true, false), "/hello");
-		assertThatThrownBy(() -> factory.getWebServer(registration).start())
-				.hasStackTraceContaining("Keystore does not contain specified alias 'test-alias-404'");
+		ThrowingCallable call = () -> factory.getWebServer(registration).start();
+		assertThatSslWithInvalidAliasCallFails(call);
+	}
+
+	protected void assertThatSslWithInvalidAliasCallFails(ThrowingCallable call) {
+		assertThatThrownBy(call).hasStackTraceContaining("Keystore does not contain specified alias 'test-alias-404'");
 	}
 
 	@Test
@@ -915,6 +922,16 @@ public abstract class AbstractServletWebServerFactoryTests {
 	}
 
 	@Test
+	void malformedAddress() throws Exception {
+		AbstractServletWebServerFactory factory = getFactory();
+		factory.setAddress(InetAddress.getByName("255.255.255.255"));
+		assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+			this.webServer = factory.getWebServer();
+			this.webServer.start();
+		}).isNotInstanceOf(PortInUseException.class);
+	}
+
+	@Test
 	void localeCharsetMappingsAreConfigured() {
 		AbstractServletWebServerFactory factory = getFactory();
 		Map<Locale, Charset> mappings = new HashMap<>();
@@ -1130,6 +1147,25 @@ public abstract class AbstractServletWebServerFactoryTests {
 		assertThat(request.get(30, TimeUnit.SECONDS)).isInstanceOf(HttpResponse.class);
 	}
 
+	@Test
+	void whenARequestIsActiveThenStopWillComplete() throws InterruptedException, BrokenBarrierException {
+		AbstractServletWebServerFactory factory = getFactory();
+		BlockingServlet blockingServlet = new BlockingServlet();
+		this.webServer = factory
+				.getWebServer((context) -> context.addServlet("blockingServlet", blockingServlet).addMapping("/"));
+		this.webServer.start();
+		int port = this.webServer.getPort();
+		initiateGetRequest(port, "/");
+		blockingServlet.awaitQueue();
+		this.webServer.stop();
+		try {
+			blockingServlet.admitOne();
+		}
+		catch (RuntimeException ex) {
+
+		}
+	}
+
 	protected Future<Boolean> initiateGracefulShutdown() {
 		RunnableFuture<Boolean> future = new FutureTask<Boolean>(() -> this.webServer.shutDownGracefully());
 		new Thread(future).start();
@@ -1157,7 +1193,7 @@ public abstract class AbstractServletWebServerFactoryTests {
 	}
 
 	protected void awaitInGracefulShutdown() {
-		while (!this.inGracefulShutdown()) {
+		while (!inGracefulShutdown()) {
 			try {
 				Thread.sleep(100);
 			}
@@ -1507,7 +1543,10 @@ public abstract class AbstractServletWebServerFactoryTests {
 
 		public void admitOne() {
 			try {
-				this.barriers.take().await();
+				CyclicBarrier barrier = this.barriers.take();
+				if (!barrier.isBroken()) {
+					barrier.await();
+				}
 			}
 			catch (InterruptedException ex) {
 				Thread.currentThread().interrupt();

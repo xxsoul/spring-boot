@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import org.springframework.web.servlet.ModelAndView;
  * Provides access to error attributes which can be logged or presented to the user.
  *
  * @author Phillip Webb
+ * @author Scott Frederick
  * @since 2.0.0
  * @see DefaultErrorAttributes
  */
@@ -36,10 +37,27 @@ public interface ErrorAttributes {
 	 * an error page {@link ModelAndView}, or returned as a
 	 * {@link ResponseBody @ResponseBody}.
 	 * @param webRequest the source request
-	 * @param includeStackTrace if stack trace elements should be included
+	 * @param includeStackTrace if stack trace element should be included
 	 * @return a map of error attributes
+	 * @deprecated since 2.3.0 in favor of
+	 * {@link #getErrorAttributes(WebRequest, boolean, boolean, boolean)}
 	 */
+	@Deprecated
 	Map<String, Object> getErrorAttributes(WebRequest webRequest, boolean includeStackTrace);
+
+	/**
+	 * Returns a {@link Map} of the error attributes. The map can be used as the model of
+	 * an error page {@link ModelAndView}, or returned as a
+	 * {@link ResponseBody @ResponseBody}.
+	 * @param webRequest the source request
+	 * @param includeStackTrace if stack trace element should be included
+	 * @param includeMessage if message element should be included
+	 * @param includeBindingErrors if errors element should be included
+	 * @return a map of error attributes
+	 * @since 2.3.0
+	 */
+	Map<String, Object> getErrorAttributes(WebRequest webRequest, boolean includeStackTrace, boolean includeMessage,
+			boolean includeBindingErrors);
 
 	/**
 	 * Return the underlying cause of the error or {@code null} if the error cannot be

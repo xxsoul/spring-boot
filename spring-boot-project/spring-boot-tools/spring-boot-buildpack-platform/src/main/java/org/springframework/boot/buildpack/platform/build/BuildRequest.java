@@ -36,7 +36,9 @@ import org.springframework.util.Assert;
  */
 public class BuildRequest {
 
-	private static final ImageReference DEFAULT_BUILDER = ImageReference.of("cloudfoundry/cnb:0.0.53-bionic");
+	static final String DEFAULT_BUILDER_IMAGE_NAME = "gcr.io/paketo-buildpacks/builder:base-platform-api-0.3";
+
+	private static final ImageReference DEFAULT_BUILDER = ImageReference.of(DEFAULT_BUILDER_IMAGE_NAME);
 
 	private final ImageReference name;
 

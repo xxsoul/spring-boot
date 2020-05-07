@@ -37,6 +37,7 @@ import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.Sync;
 import org.gradle.api.tasks.TaskAction;
 
+import org.springframework.boot.build.artifactory.ArtifactoryRepository;
 import org.springframework.util.StringUtils;
 
 /**
@@ -112,7 +113,7 @@ class AsciidoctorConventions {
 	private UnzipDocumentationResources createUnzipDocumentationResourcesTask(Project project) {
 		Configuration documentationResources = project.getConfigurations().maybeCreate("documentationResources");
 		documentationResources.getDependencies()
-				.add(project.getDependencies().create("io.spring.docresources:spring-doc-resources:0.2.0.RELEASE"));
+				.add(project.getDependencies().create("io.spring.docresources:spring-doc-resources:0.2.2.RELEASE"));
 		UnzipDocumentationResources unzipResources = project.getTasks().create("unzipDocumentationResources",
 				UnzipDocumentationResources.class);
 		unzipResources.setResources(documentationResources);
@@ -149,21 +150,9 @@ class AsciidoctorConventions {
 		Map<String, Object> attributes = new HashMap<>();
 		attributes.put("attribute-missing", "warn");
 		attributes.put("github-tag", determineGitHubTag(project));
-		attributes.put("spring-boot-artifactory-repo", determineArtifactoryRepo(project));
+		attributes.put("spring-boot-artifactory-repo", ArtifactoryRepository.forProject(project));
 		attributes.put("version", "{gradle-project-version}");
 		asciidoctorTask.attributes(attributes);
-	}
-
-	private String determineArtifactoryRepo(Project project) {
-		String version = project.getVersion().toString();
-		String type = version.substring(version.lastIndexOf('.'));
-		if (type.equals("RELEASE")) {
-			return "release";
-		}
-		if (type.startsWith("M") || type.startsWith("RC")) {
-			return "milestone";
-		}
-		return "snapshot";
 	}
 
 	private String determineGitHubTag(Project project) {
