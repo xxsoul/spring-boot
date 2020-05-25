@@ -16,7 +16,6 @@
 
 package org.springframework.boot.web.embedded.tomcat;
 
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,8 +37,10 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.naming.ContextBindings;
 
-import org.springframework.boot.web.server.GracefulShutdown;
+import org.springframework.boot.web.server.GracefulShutdownCallback;
+import org.springframework.boot.web.server.GracefulShutdownResult;
 import org.springframework.boot.web.server.PortInUseException;
+import org.springframework.boot.web.server.Shutdown;
 import org.springframework.boot.web.server.WebServer;
 import org.springframework.boot.web.server.WebServerException;
 import org.springframework.util.Assert;
@@ -85,22 +86,21 @@ public class TomcatWebServer implements WebServer {
 	 * @param autoStart if the server should be started
 	 */
 	public TomcatWebServer(Tomcat tomcat, boolean autoStart) {
-		this(tomcat, autoStart, null);
+		this(tomcat, autoStart, Shutdown.IMMEDIATE);
 	}
 
 	/**
 	 * Create a new {@link TomcatWebServer} instance.
 	 * @param tomcat the underlying Tomcat server
 	 * @param autoStart if the server should be started
-	 * @param shutdownGracePeriod grace period to use when shutting down
+	 * @param shutdown type of shutdown supported by the server
 	 * @since 2.3.0
 	 */
-	public TomcatWebServer(Tomcat tomcat, boolean autoStart, Duration shutdownGracePeriod) {
+	public TomcatWebServer(Tomcat tomcat, boolean autoStart, Shutdown shutdown) {
 		Assert.notNull(tomcat, "Tomcat Server must not be null");
 		this.tomcat = tomcat;
 		this.autoStart = autoStart;
-		this.gracefulShutdown = (shutdownGracePeriod != null) ? new TomcatGracefulShutdown(tomcat, shutdownGracePeriod)
-				: GracefulShutdown.IMMEDIATE;
+		this.gracefulShutdown = (shutdown == Shutdown.GRACEFUL) ? new GracefulShutdown(tomcat) : null;
 		initialize();
 	}
 
@@ -325,6 +325,9 @@ public class TomcatWebServer implements WebServer {
 			try {
 				this.started = false;
 				try {
+					if (this.gracefulShutdown != null) {
+						this.gracefulShutdown.abort();
+					}
 					stopTomcat();
 					this.tomcat.destroy();
 				}
@@ -379,12 +382,12 @@ public class TomcatWebServer implements WebServer {
 	}
 
 	@Override
-	public boolean shutDownGracefully() {
-		return this.gracefulShutdown.shutDownGracefully();
-	}
-
-	boolean inGracefulShutdown() {
-		return this.gracefulShutdown.isShuttingDown();
+	public void shutDownGracefully(GracefulShutdownCallback callback) {
+		if (this.gracefulShutdown == null) {
+			callback.shutdownComplete(GracefulShutdownResult.IMMEDIATE);
+			return;
+		}
+		this.gracefulShutdown.shutDownGracefully(callback);
 	}
 
 }

@@ -266,6 +266,9 @@
       "name": "server.ssl.trust-store-type",
       "description": "Type of the trust store."
     },
+    { "name": "server.shutdown",
+      "defaultValue:": "immediate"
+    },
     {
       "name": "server.tomcat.max-http-post-size",
       "type": "org.springframework.util.unit.DataSize",
@@ -510,7 +513,7 @@
       "type": "java.lang.Boolean",
       "description": "Whether to enable JMX reporting. Default to false as Cassandra JMX reporting is not compatible with Dropwizard Metrics.",
       "deprecation": {
-        "reason": "Cassandra no longer providers JMX metrics.",
+        "reason": "Cassandra no longer provides JMX metrics.",
         "level": "error"
       }
     },
@@ -536,15 +539,6 @@
       "description": "Pool timeout when trying to acquire a connection from a host's pool.",
       "deprecation": {
         "reason": "No longer available.",
-        "level": "error"
-      }
-    },
-    {
-      "name": "spring.data.cassandra.port",
-      "type": "java.lang.Integer",
-      "description": "Port of the Cassandra server.",
-      "deprecation": {
-        "reason": "each contact point must be of the form 'host:port'.",
         "level": "error"
       }
     },
@@ -760,7 +754,6 @@
       "type": "java.util.List<java.lang.String>",
       "description": "Comma-separated list of the Elasticsearch instances to use.",
       "deprecation": {
-        "replacement": "spring.elasticsearch.rest.uris",
         "level": "error"
       }
     },

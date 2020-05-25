@@ -72,7 +72,8 @@ class MavenPublishingConventions {
 	}
 
 	private void customizePom(MavenPom pom, Project project) {
-		pom.getUrl().set("https://projects.spring.io/spring-boot/#");
+		pom.getUrl().set("https://spring.io/projects/spring-boot");
+		pom.getName().set(project.provider(project::getName));
 		pom.getDescription().set(project.provider(project::getDescription));
 		pom.organization(this::customizeOrganization);
 		pom.licenses(this::customizeLicences);
@@ -89,7 +90,7 @@ class MavenPublishingConventions {
 	private void customizeLicences(MavenPomLicenseSpec licences) {
 		licences.license((licence) -> {
 			licence.getName().set("Apache License, Version 2.0");
-			licence.getUrl().set("http://www.apache.org/licenses/LICENSE-2.0");
+			licence.getUrl().set("https://www.apache.org/licenses/LICENSE-2.0");
 		});
 	}
 

@@ -55,14 +55,6 @@ class SpringIterableConfigurationPropertySourceTests {
 	}
 
 	@Test
-	void createWhenMapperIsNullShouldThrowException() {
-		assertThatIllegalArgumentException()
-				.isThrownBy(
-						() -> new SpringIterableConfigurationPropertySource(mock(EnumerablePropertySource.class), null))
-				.withMessageContaining("Mapper must not be null");
-	}
-
-	@Test
 	void iteratorShouldAdaptNames() {
 		Map<String, Object> source = new LinkedHashMap<>();
 		source.put("key1", "value1");
@@ -70,14 +62,16 @@ class SpringIterableConfigurationPropertySourceTests {
 		source.put("key3", "value3");
 		source.put("key4", "value4");
 		EnumerablePropertySource<?> propertySource = new MapPropertySource("test", source);
-		TestPropertyMapper mapper = new TestPropertyMapper();
-		mapper.addFromPropertySource("key1", "my.key1");
-		mapper.addFromPropertySource("key2", "my.key2a", "my.key2b");
-		mapper.addFromPropertySource("key4", "my.key4");
+		TestPropertyMapper mapper1 = new TestPropertyMapper();
+		mapper1.addFromPropertySource("key1", "my.key1");
+		mapper1.addFromPropertySource("key2", "my.key2a");
+		mapper1.addFromPropertySource("key4", "my.key4");
+		TestPropertyMapper mapper2 = new TestPropertyMapper();
+		mapper2.addFromPropertySource("key2", "my.key2b");
 		SpringIterableConfigurationPropertySource adapter = new SpringIterableConfigurationPropertySource(
-				propertySource, mapper);
+				propertySource, mapper1, mapper2);
 		assertThat(adapter.iterator()).toIterable().extracting(Object::toString).containsExactly("my.key1", "my.key2a",
-				"my.key2b", "my.key4");
+				"my.key4");
 	}
 
 	@Test
@@ -228,6 +222,20 @@ class SpringIterableConfigurationPropertySourceTests {
 		assertThat(adapter.stream()).hasSize(2);
 		map.put("key3", "value3");
 		assertThat(adapter.stream()).hasSize(2);
+	}
+
+	@Test
+	void orderOfUnderlyingSourceIsPreserved() {
+		Map<String, Object> map = new LinkedHashMap<>();
+		map.put("test.map.alpha", "value1");
+		map.put("test.map.bravo", "value2");
+		map.put("test.map.charlie", "value3");
+		map.put("test.map.delta", "value4");
+		EnumerablePropertySource<?> source = new OriginTrackedMapPropertySource("test", map, true);
+		SpringIterableConfigurationPropertySource propertySource = new SpringIterableConfigurationPropertySource(source,
+				DefaultPropertyMapper.INSTANCE);
+		assertThat(propertySource.stream().map(ConfigurationPropertyName::toString)).containsExactly("test.map.alpha",
+				"test.map.bravo", "test.map.charlie", "test.map.delta");
 	}
 
 	/**

@@ -2444,7 +2444,7 @@ Also, many other templating engines include their own Spring MVC integrations.
 Spring Boot includes auto-configuration support for the following templating engines:
 
  * https://freemarker.apache.org/docs/[FreeMarker]
- * http://docs.groovy-lang.org/docs/next/html/documentation/template-engines.html#_the_markuptemplateengine[Groovy]
+ * https://docs.groovy-lang.org/docs/next/html/documentation/template-engines.html#_the_markuptemplateengine[Groovy]
  * https://www.thymeleaf.org[Thymeleaf]
  * https://mustache.github.io/[Mustache]
 
@@ -2796,6 +2796,14 @@ Any resources with a path in `+/webjars/**+` are served from jar files if they a
 TIP: Spring WebFlux applications do not strictly depend on the Servlet API, so they cannot be deployed as war files and do not use the `src/main/webapp` directory.
 
 
+[[boot-features-webflux-welcome-page]]
+==== Welcome Page
+Spring Boot supports both static and templated welcome pages.
+It first looks for an `index.html` file in the configured static content locations.
+If one is not found, it then looks for an `index` template.
+If either is found, it is automatically used as the welcome page of the application.
+
+
 
 [[boot-features-webflux-template-engines]]
 ==== Template Engines
@@ -3145,19 +3153,26 @@ You can learn more about the resource configuration on the client side in the <<
 [[boot-features-graceful-shutdown]]
 == Graceful shutdown
 Graceful shutdown is supported with all four embedded web servers (Jetty, Reactor Netty, Tomcat, and Undertow) and with both reactive and Servlet-based web applications.
-When enabled, shutdown of the application will include a grace period of configurable duration.
-During this grace period, existing requests will be allowed to complete but no new requests will be permitted.
+It occurs as part of closing the application context and is performed in the earliest phase of stopping `SmartLifecycle` beans.
+This stop processing uses a timeout which provides a grace period during which existing requests will be allowed to complete but no new requests will be permitted.
 The exact way in which new requests are not permitted varies depending on the web server that is being used.
 Jetty, Reactor Netty, and Tomcat will stop accepting requests at the network layer.
 Undertow will accept requests but respond immediately with a service unavailable (503) response.
 
-Graceful shutdown occurs as one of the first steps during application close processing and before any beans have been destroyed.
-This ensures that the beans are available for use by any processing that occurs while in-flight requests are being allowed to complete.
-To enable graceful shutdown, configure the configprop:server.shutdown.grace-period[] property, as shown in the following example:
+NOTE: Graceful shutdown with Tomcat requires Tomcat 9.0.33 or later.
+
+To enable graceful shutdown, configure the configprop:server.shutdown[] property, as shown in the following example:
 
 [source,properties,indent=0,configprops]
 ----
-server.shutdown.grace-period=30s
+server.shutdown=graceful
+----
+
+To configure the timeout period, configure the configprop:spring.lifecycle.timeout-per-shutdown-phase[] property, as shown in the following example:
+
+[source,properties,indent=0,configprops]
+----
+spring.lifecycle.timeout-per-shutdown-phase=20s
 ----
 
 
@@ -7277,6 +7292,40 @@ include::{code-examples}/test/autoconfigure/restdocs/restassured/AdvancedConfigu
 
 
 
+[[boot-features-testing-spring-boot-applications-testing-autoconfigured-webservices]]
+==== Auto-configured Spring Web Services Tests
+You can use `@WebServiceClientTest` to test applications that use call web services using the Spring Web Services project.
+By default, it configures a mock `WebServiceServer` bean and automatically customizes your `WebServiceTemplateBuilder`.
+(For more about using Web Services with Spring Boot, see "<<boot-features-webservices>>", earlier in this chapter.)
+
+
+TIP: A list of the auto-configuration settings that are enabled by `@WebServiceClientTest` can be <<appendix-test-auto-configuration.adoc#test-auto-configuration,found in the appendix>>.
+
+The following example shows the `@WebServiceClientTest` annotation in use:
+
+[source,java,indent=0]
+----
+	@WebServiceClientTest(ExampleWebServiceClient.class)
+	class WebServiceClientIntegrationTests {
+
+		@Autowired
+		private MockWebServiceServer server;
+
+		@Autowired
+		private ExampleWebServiceClient client;
+
+		@Test
+		void mockServerCall() {
+			this.server.expect(payload(new StringSource("<request/>"))).andRespond(
+					withPayload(new StringSource("<response><status>200</status></response>")));
+			assertThat(this.client.test()).extracting(Response::getStatus).isEqualTo(200);
+		}
+
+	}
+----
+
+
+
 [[boot-features-testing-spring-boot-applications-testing-auto-configured-additional-auto-config]]
 ==== Additional Auto-configuration and Slicing
 Each slice provides one or more `@AutoConfigure...` annotations that namely defines the auto-configurations that should be included as part of a slice.
@@ -7780,13 +7829,22 @@ include::{test-examples}/autoconfigure/UserServiceAutoConfigurationTests.java[ta
 
 [[boot-features-custom-starter]]
 === Creating Your Own Starter
-A full Spring Boot starter for a library may contain the following components:
+A typical Spring Boot starter contains code to auto-configure and customize the infrastructure of a given technology, let's call that "acme".
+To make it easily extensible, a number of configuration keys in a dedicated namespace can be exposed to the environment.
+Finally, a single "starter" dependency is provided to help users get started as easily as possible.
 
-* The `autoconfigure` module that contains the auto-configuration code.
-* The `starter` module that provides a dependency to the `autoconfigure` module as well as the library and any additional dependencies that are typically useful.
+Concretely, a custom starter can contain the following:
+
+* The `autoconfigure` module that contains the auto-configuration code for "acme".
+* The `starter` module that provides a dependency to the `autoconfigure` module as well as "acme" and any additional dependencies that are typically useful.
 In a nutshell, adding the starter should provide everything needed to start using that library.
 
-TIP: You may combine the auto-configuration code and the dependency management in a single module if you do not need to separate those two concerns.
+This separation in two modules is in no way necessary.
+If "acme" has several flavours, options or optional features, then it is better to separate the auto-configuration as you can clearly express the fact some features are optional.
+Besides, you have the ability to craft a starter that provides an opinion about those optional dependencies.
+At the same time, others can rely only on the `autoconfigure` module and craft their own starter with different opinions.
+
+If the auto-configuration is relatively straightforward and does not have optional feature, merging the two modules in the starter is definitely an option.
 
 
 
@@ -7797,7 +7855,7 @@ Do not start your module names with `spring-boot`, even if you use a different M
 We may offer official support for the thing you auto-configure in the future.
 
 As a rule of thumb, you should name a combined module after the starter.
-For example, assume that you are creating a starter for "acme" and that you name the auto-configure module `acme-spring-boot-autoconfigure` and the starter `acme-spring-boot-starter`.
+For example, assume that you are creating a starter for "acme" and that you name the auto-configure module `acme-spring-boot` and the starter `acme-spring-boot-starter`.
 If you only have one module that combines the two, name it `acme-spring-boot-starter`.
 
 
@@ -8043,7 +8101,7 @@ JUnit 5 enables a test class to be instantiated once and reused for all of the c
 This makes it possible to use `@BeforeClass` and `@AfterClass` annotations on non-static methods, which is a good fit for Kotlin.
 
 JUnit 5 is the default and the vintage engine is provided for backward compatibility with JUnit 4.
-If you don't use it, exclude `org.junit.vintange:junit-vintage-engine`.
+If you don't use it, exclude `org.junit.vintage:junit-vintage-engine`.
 You also need to {junit5-docs}/#writing-tests-test-instance-lifecycle-changing-default[switch test instance lifecycle to "per-class"].
 
 To mock Kotlin classes, https://mockk.io/[MockK] is recommended.
