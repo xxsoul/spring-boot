@@ -33,6 +33,7 @@ import org.flywaydb.core.api.migration.JavaMigration;
 import org.flywaydb.core.internal.license.FlywayProUpgradeRequiredException;
 import org.hibernate.engine.transaction.jta.platform.internal.NoJtaPlatform;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 
 import org.springframework.beans.factory.BeanCreationException;
@@ -42,6 +43,8 @@ import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.boot.jdbc.SchemaManagement;
 import org.springframework.boot.orm.jpa.EntityManagerFactoryBuilder;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -76,6 +79,7 @@ import static org.mockito.Mockito.mock;
  * @author András Deák
  * @author Takaaki Shimbo
  */
+@ExtendWith(OutputCaptureExtension.class)
 class FlywayAutoConfigurationTests {
 
 	private ApplicationContextRunner contextRunner = new ApplicationContextRunner()
@@ -437,14 +441,10 @@ class FlywayAutoConfigurationTests {
 	}
 
 	@Test
-	void licenseKeyIsCorrectlyMapped() {
+	void licenseKeyIsCorrectlyMapped(CapturedOutput output) {
 		this.contextRunner.withUserConfiguration(EmbeddedDataSourceConfiguration.class)
-				.withPropertyValues("spring.flyway.license-key=<<secret>>").run((context) -> {
-					assertThat(context).hasFailed();
-					Throwable failure = context.getStartupFailure();
-					assertThat(failure).hasRootCauseInstanceOf(FlywayProUpgradeRequiredException.class);
-					assertThat(failure).hasMessageContaining(" licenseKey ");
-				});
+				.withPropertyValues("spring.flyway.license-key=<<secret>>").run((context) -> assertThat(output)
+						.contains("<<secret>> is not supported by Flyway Community Edition"));
 	}
 
 	@Test

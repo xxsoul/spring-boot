@@ -93,7 +93,7 @@ public class DependencyCustomizer {
 			protected boolean canAdd() {
 				for (String className : classNames) {
 					try {
-						DependencyCustomizer.this.loader.loadClass(className);
+						Class.forName(className, false, DependencyCustomizer.this.loader);
 					}
 					catch (Exception ex) {
 						return true;
@@ -116,7 +116,7 @@ public class DependencyCustomizer {
 			protected boolean canAdd() {
 				for (String className : classNames) {
 					try {
-						DependencyCustomizer.this.loader.loadClass(className);
+						Class.forName(className, false, DependencyCustomizer.this.loader);
 						return false;
 					}
 					catch (Exception ex) {
@@ -165,10 +165,7 @@ public class DependencyCustomizer {
 			protected boolean canAdd() {
 				for (String path : paths) {
 					try {
-						if (DependencyCustomizer.this.loader.getResource(path) != null) {
-							return true;
-						}
-						return false;
+						return DependencyCustomizer.this.loader.getResource(path) != null;
 					}
 					catch (Exception ex) {
 						// swallow exception and continue

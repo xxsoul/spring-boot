@@ -284,7 +284,7 @@ public abstract class AbstractWebMvcEndpointHandlerMapping extends RequestMappin
 	 * Adapter class to convert an {@link OperationInvoker} into a
 	 * {@link ServletWebOperation}.
 	 */
-	private class ServletWebOperationAdapter implements ServletWebOperation {
+	private static class ServletWebOperationAdapter implements ServletWebOperation {
 
 		private static final String PATH_SEPARATOR = AntPathMatcher.DEFAULT_PATH_SEPARATOR;
 
@@ -375,7 +375,7 @@ public abstract class AbstractWebMvcEndpointHandlerMapping extends RequestMappin
 	/**
 	 * Handler for a {@link ServletWebOperation}.
 	 */
-	private final class OperationHandler {
+	private static final class OperationHandler {
 
 		private final ServletWebOperation operation;
 

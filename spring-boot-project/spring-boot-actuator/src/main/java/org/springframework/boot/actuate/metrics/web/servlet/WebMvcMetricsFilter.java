@@ -66,22 +66,6 @@ public class WebMvcMetricsFilter extends OncePerRequestFilter {
 	 * @param registry the meter registry
 	 * @param tagsProvider the tags provider
 	 * @param metricName the metric name
-	 * @param autoTimeRequests if requests should be automatically timed
-	 * @since 2.0.7
-	 * @deprecated since 2.2.0 in favor of
-	 * {@link #WebMvcMetricsFilter(MeterRegistry, WebMvcTagsProvider, String, AutoTimer)}
-	 */
-	@Deprecated
-	public WebMvcMetricsFilter(MeterRegistry registry, WebMvcTagsProvider tagsProvider, String metricName,
-			boolean autoTimeRequests) {
-		this(registry, tagsProvider, metricName, AutoTimer.ENABLED);
-	}
-
-	/**
-	 * Create a new {@link WebMvcMetricsFilter} instance.
-	 * @param registry the meter registry
-	 * @param tagsProvider the tags provider
-	 * @param metricName the metric name
 	 * @param autoTimer the auto-timers to apply or {@code null} to disable auto-timing
 	 * @since 2.2.0
 	 */

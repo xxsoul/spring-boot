@@ -30,15 +30,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.shared.artifact.filter.collection.AbstractArtifactFeatureFilter;
 import org.apache.maven.shared.artifact.filter.collection.FilterArtifacts;
+import org.apache.maven.toolchain.Toolchain;
+import org.apache.maven.toolchain.ToolchainManager;
 
 import org.springframework.boot.loader.tools.FileUtils;
+import org.springframework.boot.loader.tools.JavaExecutable;
 import org.springframework.boot.loader.tools.MainClassFinder;
 
 /**
@@ -65,6 +70,20 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	private MavenProject project;
 
 	/**
+	 * The current Maven session. This is used for toolchain manager API calls.
+	 * @since 2.3.0
+	 */
+	@Parameter(defaultValue = "${session}", readonly = true)
+	private MavenSession session;
+
+	/**
+	 * The toolchain manager to use to locate a custom JDK.
+	 * @since 2.3.0
+	 */
+	@Component
+	private ToolchainManager toolchainManager;
+
+	/**
 	 * Add maven resources to the classpath directly, this allows live in-place editing of
 	 * resources. Duplicate resources are removed from {@code target/classes} to prevent
 	 * them to appear twice if {@code ClassLoader.getResources()} is called. Please
@@ -74,15 +93,6 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	 */
 	@Parameter(property = "spring-boot.run.addResources", defaultValue = "false")
 	private boolean addResources = false;
-
-	/**
-	 * Path to agent jar. NOTE: a forked process is required to use this feature.
-	 * @since 1.0.0
-	 * @deprecated since 2.2.0 in favor of {@code agents}
-	 */
-	@Deprecated
-	@Parameter(property = "spring-boot.run.agent")
-	private File[] agent;
 
 	/**
 	 * Path to agent jars. NOTE: a forked process is required to use this feature.
@@ -166,12 +176,22 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	private String mainClass;
 
 	/**
-	 * Additional folders besides the classes directory that should be added to the
+	 * Additional directories besides the classes directory that should be added to the
+	 * classpath.
+	 * @since 1.0.0
+	 * @deprecated since 2.3.0 in favor of {@code directories}
+	 */
+	@Deprecated
+	@Parameter(property = "spring-boot.run.folders")
+	private String[] folders;
+
+	/**
+	 * Additional directories besides the classes directory that should be added to the
 	 * classpath.
 	 * @since 1.0.0
 	 */
-	@Parameter(property = "spring-boot.run.folders")
-	private String[] folders;
+	@Parameter(property = "spring-boot.run.directories")
+	private String[] directories;
 
 	/**
 	 * Directory containing the classes and resource files that should be packaged into
@@ -221,29 +241,13 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 		return this.fork;
 	}
 
-	/**
-	 * Specify if fork should be enabled by default.
-	 * @return {@code true} if fork should be enabled by default
-	 * @see #logDisabledFork()
-	 * @deprecated as of 2.2.0 in favour of enabling forking by default.
-	 */
-	@Deprecated
-	protected boolean enableForkByDefault() {
-		return hasAgent() || hasJvmArgs() || hasEnvVariables() || hasWorkingDirectorySet();
-	}
-
 	private boolean hasAgent() {
-		File[] configuredAgents = determineAgents();
-		return (configuredAgents != null && configuredAgents.length > 0);
+		return (this.agents != null && this.agents.length > 0);
 	}
 
 	private boolean hasJvmArgs() {
 		return (this.jvmArguments != null && !this.jvmArguments.isEmpty())
 				|| (this.systemPropertyVariables != null && !this.systemPropertyVariables.isEmpty());
-	}
-
-	private boolean hasEnvVariables() {
-		return (this.environmentVariables != null && !this.environmentVariables.isEmpty());
 	}
 
 	private boolean hasWorkingDirectorySet() {
@@ -326,6 +330,16 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	}
 
 	/**
+	 * Provides access to the java binary executable, regardless of OS.
+	 * @return the java executable
+	 */
+	protected String getJavaExecutable() {
+		Toolchain toolchain = this.toolchainManager.getToolchainFromBuildContext("jdk", this.session);
+		String javaExecutable = (toolchain != null) ? toolchain.findTool("java") : null;
+		return (javaExecutable != null) ? javaExecutable : new JavaExecutable().toString();
+	}
+
+	/**
 	 * Resolve the environment variables to use.
 	 * @return an {@link EnvVariables} defining the environment variables
 	 */
@@ -369,22 +383,17 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	}
 
 	private void addAgents(List<String> args) {
-		File[] configuredAgents = determineAgents();
-		if (configuredAgents != null) {
+		if (this.agents != null) {
 			if (getLog().isInfoEnabled()) {
-				getLog().info("Attaching agents: " + Arrays.asList(configuredAgents));
+				getLog().info("Attaching agents: " + Arrays.asList(this.agents));
 			}
-			for (File agent : configuredAgents) {
+			for (File agent : this.agents) {
 				args.add("-javaagent:" + agent);
 			}
 		}
 		if (this.noverify) {
 			args.add("-noverify");
 		}
-	}
-
-	private File[] determineAgents() {
-		return (this.agents != null) ? this.agents : this.agent;
 	}
 
 	private void addActiveProfileArgument(RunArguments arguments) {
@@ -441,7 +450,7 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	protected URL[] getClassPathUrls() throws MojoExecutionException {
 		try {
 			List<URL> urls = new ArrayList<>();
-			addUserDefinedFolders(urls);
+			addUserDefinedDirectories(urls);
 			addResources(urls);
 			addProjectClasses(urls);
 			addDependencies(urls);
@@ -452,10 +461,15 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 		}
 	}
 
-	private void addUserDefinedFolders(List<URL> urls) throws MalformedURLException {
+	private void addUserDefinedDirectories(List<URL> urls) throws MalformedURLException {
 		if (this.folders != null) {
 			for (String folder : this.folders) {
 				urls.add(new File(folder).toURI().toURL());
+			}
+		}
+		if (this.directories != null) {
+			for (String directory : this.directories) {
+				urls.add(new File(directory).toURI().toURL());
 			}
 		}
 	}
@@ -556,7 +570,7 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 			Thread thread = Thread.currentThread();
 			ClassLoader classLoader = thread.getContextClassLoader();
 			try {
-				Class<?> startClass = classLoader.loadClass(this.startClassName);
+				Class<?> startClass = Class.forName(this.startClassName, false, classLoader);
 				Method mainMethod = startClass.getMethod("main", String[].class);
 				if (!mainMethod.isAccessible()) {
 					mainMethod.setAccessible(true);

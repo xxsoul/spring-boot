@@ -375,7 +375,7 @@ public abstract class AbstractWebFluxEndpointHandlerMapping extends RequestMappi
 	/**
 	 * Handler for a {@link ReactiveWebOperation}.
 	 */
-	private final class WriteOperationHandler {
+	private static final class WriteOperationHandler {
 
 		private final ReactiveWebOperation operation;
 
@@ -394,7 +394,7 @@ public abstract class AbstractWebFluxEndpointHandlerMapping extends RequestMappi
 	/**
 	 * Handler for a {@link ReactiveWebOperation}.
 	 */
-	private final class ReadOperationHandler {
+	private static final class ReadOperationHandler {
 
 		private final ReactiveWebOperation operation;
 
