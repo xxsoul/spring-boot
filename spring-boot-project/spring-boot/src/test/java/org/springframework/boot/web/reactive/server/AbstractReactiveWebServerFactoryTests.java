@@ -359,7 +359,7 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 	}
 
 	@Test
-	protected void whenARequestRemainsInFlightThenShutDownGracefullyDoesNotInvokeCallbackUntilTheRequestCompletes()
+	void whenARequestRemainsInFlightThenShutDownGracefullyDoesNotInvokeCallbackUntilTheRequestCompletes()
 			throws Exception {
 		AbstractReactiveWebServerFactory factory = getFactory();
 		factory.setShutdown(Shutdown.GRACEFUL);
@@ -456,9 +456,8 @@ public abstract class AbstractReactiveWebServerFactoryTests {
 		this.webServer.start();
 
 		HttpClient client = HttpClient.create().wiretap(true).compress(true)
-				.tcpConfiguration((tcpClient) -> tcpClient.doOnConnected(
-						(connection) -> connection.channel().pipeline().addBefore(NettyPipeline.HttpDecompressor,
-								"CompressionTest", new CompressionDetectionHandler())));
+				.doOnConnected((connection) -> connection.channel().pipeline().addBefore(NettyPipeline.HttpDecompressor,
+						"CompressionTest", new CompressionDetectionHandler()));
 		return getWebClient(client, this.webServer.getPort()).build();
 	}
 

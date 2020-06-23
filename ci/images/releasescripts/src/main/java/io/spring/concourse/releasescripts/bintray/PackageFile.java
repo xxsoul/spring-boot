@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,25 @@
  * limitations under the License.
  */
 
-package smoketest;
+package io.spring.concourse.releasescripts.bintray;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+/**
+ * Details for a single packaged file.
+ *
+ * @author Phillip Webb
+ */
+public class PackageFile {
 
-@SpringBootApplication
-public class SampleJUnitJupiterApplication {
+	private String name;
 
-	public static void main(String[] args) {
-		SpringApplication.run(SampleJUnitJupiterApplication.class, args);
+	private String sha256;
+
+	public String getName() {
+		return this.name;
+	}
+
+	public String getSha256() {
+		return this.sha256;
 	}
 
 }

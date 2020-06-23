@@ -313,7 +313,7 @@ Application events are sent in the following order, as your application runs:
 . An `ApplicationStartedEvent` is sent after the context has been refreshed but before any application and command-line runners have been called.
 . An `AvailabilityChangeEvent` is sent right after with `LivenessState.CORRECT` to indicate that the application is considered as live.
 . An `ApplicationReadyEvent` is sent after any application and command-line runners have been called.
-. An `LivenessState` is sent right after with `ReadinessState.ACCEPTING_TRAFFIC` to indicate that the application is ready to service requests.
+. An `AvailabilityChangeEvent` is sent right after with `ReadinessState.ACCEPTING_TRAFFIC` to indicate that the application is ready to service requests.
 . An `ApplicationFailedEvent` is sent if there is an exception on startup.
 
 The above list only includes ``SpringApplicationEvent``s that are tied to a `SpringApplication`.
@@ -2601,11 +2601,19 @@ Note that the default `FilterRegistrationBean` does not include the `ERROR` disp
 
 
 
-[[boot-features-error-handling-websphere]]
-CAUTION:When deployed to a servlet container, Spring Boot uses its error page filter to forward a request with an error status to the appropriate error page.
-The request can only be forwarded to the correct error page if the response has not already been committed.
+[[boot-features-error-handling-war-deployment]]
+===== Error handling in a war deployment
+When deployed to a servlet container, Spring Boot uses its error page filter to forward a request with an error status to the appropriate error page.
+This is necessary as the Servlet specification does not provide an API for registering error pages.
+Depending on the container that you are deploying your war file to and the technologies that your application uses, some additional configuration may be required.
+
+The error page filter can only forward the request to the correct error page if the response has not already been committed.
 By default, WebSphere Application Server 8.0 and later commits the response upon successful completion of a servlet's service method.
 You should disable this behavior by setting `com.ibm.ws.webcontainer.invokeFlushAfterService` to `false`.
+
+If you are using Spring Security and want to access the principal in an error page, you must configure Spring Security's filter to be invoked on error dispatches.
+To do so, set the `spring.security.filter.dispatcher-types` property to `async, error, forward, request`.
+
 
 
 
@@ -5720,7 +5728,7 @@ IMPORTANT: Properties set in this way override any configuration item that Sprin
 ==== Testing with Embedded Kafka
 Spring for Apache Kafka provides a convenient way to test projects with an embedded Apache Kafka broker.
 To use this feature, annotate a test class with `@EmbeddedKafka` from the `spring-kafka-test` module.
-For more information, please see the Spring for Apache Kafka https://docs.spring.io/spring-kafka/docs/current/reference/html/#embedded-kafka-annotation[reference manual].
+For more information, please see the Spring for Apache Kafka {spring-kafka-docs}#embedded-kafka-annotation[reference manual].
 
 To make Spring Boot auto-configuration work with the aforementioned embedded Apache Kafka broker, you need to remap a system property for embedded broker addresses (populated by the `EmbeddedKafkaBroker`) into the Spring Boot configuration property for Apache Kafka.
 There are several ways to do that:
@@ -6251,24 +6259,26 @@ Most developers use the `spring-boot-starter-test` "`Starter`", which imports bo
 
 [TIP]
 ====
-The starter also brings the vintage engine so that you can run both JUnit 4 and JUnit 5 tests.
-If you have migrated your tests to JUnit 5, you should exclude JUnit 4 support, as shown in the following example:
+If you have tests that use JUnit 4, JUnit 5's vintage engine can be used to run them.
+To use the vintage engine, add a dependency on `junit-vintage-engine`, as shown in the following example:
 
 [source,xml,indent=0,subs="verbatim,quotes,attributes"]
 ----
 	<dependency>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-test</artifactId>
+		<groupId>org.junit.vintage</groupId>
+		<artifactId>junit-vintage-engine</artifactId>
 		<scope>test</scope>
 		<exclusions>
 			<exclusion>
-				<groupId>org.junit.vintage</groupId>
-				<artifactId>junit-vintage-engine</artifactId>
+				<groupId>org.hamcrest</groupId>
+				<artifactId>hamcrest-core</artifactId>
 			</exclusion>
 		</exclusions>
 	</dependency>
 ----
 ====
+
+`hamcrest-core` is excluded in favor of `org.hamcrest:hamcrest` that is part of `spring-boot-starter-test`.
 
 
 
@@ -6276,7 +6286,7 @@ If you have migrated your tests to JUnit 5, you should exclude JUnit 4 support, 
 === Test Scope Dependencies
 The `spring-boot-starter-test` "`Starter`" (in the `test` `scope`) contains the following provided libraries:
 
-* https://junit.org/junit5/[JUnit 5] (including the vintage engine for backward compatibility with JUnit 4): The de-facto standard for unit testing Java applications.
+* https://junit.org/junit5/[JUnit 5]: The de-facto standard for unit testing Java applications.
 * {spring-framework-docs}/testing.html#integration-testing[Spring Test] & Spring Boot Test: Utilities and integration test support for Spring Boot applications.
 * https://assertj.github.io/doc/[AssertJ]: A fluent assertion library.
 * https://github.com/hamcrest/JavaHamcrest[Hamcrest]: A library of matcher objects (also known as constraints or predicates).
@@ -7926,6 +7936,30 @@ It is recommended to add the following dependency in a module that contains auto
 	</dependency>
 ----
 
+If you have defined auto-configurations directly in your application, make sure to configure the `spring-boot-maven-plugin` to prevent the `repackage` goal from adding the dependency into the fat jar:
+
+[source,xml,indent=0,subs="verbatim,quotes,attributes"]
+----
+	<project>
+		<build>
+			<plugins>
+				<plugin>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-maven-plugin</artifactId>
+					<configuration>
+						<excludes>
+							<exclude>
+								<groupId>org.springframework.boot</groupId>
+								<artifactId>spring-boot-autoconfigure-processor</artifactId>
+							</exclude>
+						</excludes>
+					</configuration>
+				</plugin>
+			</plugins>
+		</build>
+	</project>
+----
+
 With Gradle 4.5 and earlier, the dependency should be declared in the `compileOnly` configuration, as shown in the following example:
 
 [source,groovy,indent=0,subs="verbatim,quotes,attributes"]
@@ -8099,10 +8133,6 @@ Note that some features (such as detecting the default value or deprecated items
 While it is possible to use JUnit 4 to test Kotlin code, JUnit 5 is provided by default and is recommended.
 JUnit 5 enables a test class to be instantiated once and reused for all of the class's tests.
 This makes it possible to use `@BeforeClass` and `@AfterClass` annotations on non-static methods, which is a good fit for Kotlin.
-
-JUnit 5 is the default and the vintage engine is provided for backward compatibility with JUnit 4.
-If you don't use it, exclude `org.junit.vintage:junit-vintage-engine`.
-You also need to {junit5-docs}/#writing-tests-test-instance-lifecycle-changing-default[switch test instance lifecycle to "per-class"].
 
 To mock Kotlin classes, https://mockk.io/[MockK] is recommended.
 If you need the `Mockk` equivalent of the Mockito specific <<boot-features-testing-spring-boot-applications-mocking-beans,`@MockBean` and `@SpyBean` annotations>>, you can use https://github.com/Ninja-Squad/springmockk[SpringMockK] which provides similar `@MockkBean` and `@SpykBean` annotations.
